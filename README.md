@@ -22,6 +22,7 @@ It is strongly recommended to use only the official software!
 
 ## Installation
 Copy the dll files to the \Plugins folder. Make sure that Windows did not automatically block the files (uncheck the "Unblock" property).
+### _*** If you are using other FanControl plugins for quadro or highflownext, please uninstall them ***_
 
 ## Experimental Octo Support
 Since Quadro and Octo devices are quite similiar, the Octo part has been implemented in the code but has not been enabled. If you would like to test it, please download the source code in visual studio, uncomment line 19 of the file [Device/DeviceHelpers.cs](https://github.com/medevil84/FanControl.AquacomputerDevices/blob/master/FanControl.AquacomputerDevices/Devices/DevicesHelpers.cs#L19) and recompile.
