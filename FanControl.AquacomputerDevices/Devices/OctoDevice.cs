@@ -294,4 +294,3 @@ namespace FanControl.AquacomputerDevices.Devices
         }
     }
 }
-}
