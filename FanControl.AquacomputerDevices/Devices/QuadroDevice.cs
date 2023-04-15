@@ -1,0 +1,268 @@
+﻿using AquacomputerStructs.Helpers;
+using FanControl.Plugins;
+using HidLibrary;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Reflection;
+using System.Runtime;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace FanControl.AquacomputerDevices.Devices
+{
+    internal class QuadroDevice : IAquacomputerDevice
+    {
+        private HidLibrary.HidDevice hidDevice = null;
+        private IPluginLogger _logger;
+        private ReaderWriterLock rwl;
+        private AquacomputerStructs.Devices.Quadro.Settings? initial_settings = null;
+        private AquacomputerStructs.Devices.Quadro.Settings? current_settings = null;
+        private AquacomputerStructs.Devices.Quadro.sensor_data sensor_data;
+        private DateTime last_settings_read = DateTime.MinValue;
+        private readonly TimeSpan settings_timeout = new TimeSpan(0, 5, 0); // every 5 minutes
+
+        public int GetProductId() => 0xF00D;
+
+        public IAquacomputerDevice AssignDevice(HidDevice device, IPluginLogger logger)
+        {
+            _logger = logger;
+            _logger.Log($"QuadroDevice.AssignDevice(device: {device}, logger: {logger})");
+            if (hidDevice == null)
+            {
+                hidDevice = device;
+                rwl = new ReaderWriterLock();
+
+                hidDevice.OpenDevice();
+                Update();
+            }
+            return this;
+        }
+
+        public void Load(IPluginSensorsContainer _container)
+        {
+            _logger.Log($"QuadroDevice.Load(_container: {_container})");
+            if (hidDevice == null)
+                return;
+
+            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Quadro.sensor_data>("Fans0", "Quadro Fan 1", () => this.Data_GetTemperature(() => this.sensor_data.fans[0].speed, 1.0f)));
+            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Quadro.sensor_data>("Fans1", "Quadro Fan 2", () => this.Data_GetTemperature(() => this.sensor_data.fans[1].speed, 1.0f)));
+            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Quadro.sensor_data>("Fans2", "Quadro Fan 3", () => this.Data_GetTemperature(() => this.sensor_data.fans[2].speed, 1.0f)));
+            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Quadro.sensor_data>("Fans3", "Quadro Fan 4", () => this.Data_GetTemperature(() => this.sensor_data.fans[3].speed, 1.0f)));
+
+            // Value for this sensor should be checked!
+            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Quadro.sensor_data>("Flow", "Quadro Flow Sensor", () => this.Data_GetTemperature(() => this.sensor_data.flow)));
+
+            _container.TempSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Quadro.sensor_data>("Temp0", "Quadro Temperature 1", () => this.Data_GetTemperature(() => this.sensor_data.temperatures[0])));
+            _container.TempSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Quadro.sensor_data>("Temp1", "Quadro Temperature 2", () => this.Data_GetTemperature(() => this.sensor_data.temperatures[1])));
+            _container.TempSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Quadro.sensor_data>("Temp2", "Quadro Temperature 3", () => this.Data_GetTemperature(() => this.sensor_data.temperatures[2])));
+            _container.TempSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Quadro.sensor_data>("Temp3", "Quadro Temperature 4", () => this.Data_GetTemperature(() => this.sensor_data.temperatures[3])));
+            
+            _container.ControlSensors.Add(new DeviceBaseControlSensor<AquacomputerStructs.Devices.Quadro.Settings>("Power0", "Quadro Controller Power 1", 
+                () => this.Settings_GetControllerPower(0), null,
+                (x) => this.Settings_SetControllerPower(0, x),
+                () => this.Settings_ResetControllerPower(0)));
+            _container.ControlSensors.Add(new DeviceBaseControlSensor<AquacomputerStructs.Devices.Quadro.Settings>("Power1", "Quadro Controller Power 2",
+                () => this.Settings_GetControllerPower(1), null,
+                (x) => this.Settings_SetControllerPower(1, x),
+                () => this.Settings_ResetControllerPower(1)));
+            _container.ControlSensors.Add(new DeviceBaseControlSensor<AquacomputerStructs.Devices.Quadro.Settings>("Power2", "Quadro Controller Power 3",
+                () => this.Settings_GetControllerPower(2), null,
+                (x) => this.Settings_SetControllerPower(2, x),
+                () => this.Settings_ResetControllerPower(2)));
+            _container.ControlSensors.Add(new DeviceBaseControlSensor<AquacomputerStructs.Devices.Quadro.Settings>("Power3", "Quadro Controller Power 4",
+                () => this.Settings_GetControllerPower(3), null,
+                (x) => this.Settings_SetControllerPower(3, x),
+                () => this.Settings_ResetControllerPower(3)));
+        }
+
+        public void Unload()
+        {
+            _logger.Log($"QuadroDevice.Unload()");
+            hidDevice?.CloseDevice();
+            hidDevice = null;
+        }
+
+        public void Update()
+        {
+            //_logger.Log($"QuadroDevice.Update() (hidDevice: {hidDevice}, is open: {hidDevice.IsOpen}");
+            if (hidDevice == null)
+                return;
+
+            rwl.AcquireWriterLock(100);
+            try
+            {
+                var deviceData = hidDevice.Read(500);
+
+                if (deviceData != null && deviceData.Status == HidDeviceData.ReadStatus.Success)
+                {
+                    int offset = 0;
+                    EndianAttribute.GetStructAtOffset<AquacomputerStructs.Common.device_header>(deviceData.Data, ref offset);
+                    EndianAttribute.GetStructAtOffset<AquacomputerStructs.Devices.Quadro.device_status>(deviceData.Data, ref offset);
+                    sensor_data = EndianAttribute.GetStructAtOffset<AquacomputerStructs.Devices.Quadro.sensor_data>(deviceData.Data, ref offset);
+                }
+
+                Settings_UpdateSettings();
+            }
+            finally
+            {
+                rwl.ReleaseWriterLock();
+            }
+        }
+
+        private float? Data_GetTemperature(Func<short> temp, float ratio = 100.0f)
+        {
+            short val = (short)Data_GetReadLockLambda(() => (float)temp());
+            if (val == short.MaxValue)
+                return 0;
+
+            return val / ratio;
+        }
+
+        private float? Data_GetReadLockLambda(Func<float?> x)
+        {
+            //_logger.Log($"QuadroDevice.Data_GetReadLockLambda(x: {x.Method})");
+            if (hidDevice == null)
+                return null;
+
+            try
+            {
+                rwl.AcquireReaderLock(100);
+                try
+                {
+                    return x();
+                }
+                finally
+                {
+                    rwl.ReleaseReaderLock();
+                }
+            }
+            catch (ApplicationException) { }
+            return null;
+        }
+
+        private float? Settings_GetControllerPower(int index)
+        {
+            //_logger.Log($"QuadroDevice.Settings_GetControllerPower(index: {index})");
+            if (hidDevice == null)
+                return null;
+
+            try
+            {
+                if (this.current_settings == null)
+                    return null;
+
+                rwl.AcquireReaderLock(100);
+                try
+                {
+                    return this.current_settings?.controller[index].power / 100.0f;
+                }
+                finally
+                {
+                    rwl.ReleaseReaderLock();
+                }
+            }
+            catch (ApplicationException) { }
+            return null;
+        }
+
+        private bool Settings_UpdateSettings(bool force = false)
+        {
+            //_logger.Log($"QuadroDevice.Settings_UpdateSettings()");
+            int offset = 1;
+
+            if (this.current_settings != null && !force &&
+                this.last_settings_read + this.settings_timeout >= DateTime.Now)
+                return true;
+
+            // Read current settings
+            if (hidDevice.ReadFeatureData(out byte[] data, 3))
+            {
+                this.current_settings = EndianAttribute.GetStructAtOffset<AquacomputerStructs.Devices.Quadro.Settings>(data, ref offset);
+                if (this.initial_settings == null)
+                    this.initial_settings = current_settings;
+
+                this.last_settings_read = DateTime.Now;
+                return true;
+            } 
+            else
+            {
+                _logger.Log("QuadroDevice: Failed to read settings from device.");
+                //Debugger.Launch();
+                return false;
+            }
+        }
+
+        private void Settings_SetControllerPower(int index, float? val)
+        {
+            //_logger.Log($"QuadroDevice.Settings_SetControllerPower(index: {index}, val: {val})");
+            if (hidDevice == null)
+                return;
+
+            rwl.AcquireWriterLock(100);
+            try
+            {
+                byte[] data;
+
+                // Update current settings if never read
+                if (this.current_settings == null)
+                    if (!Settings_UpdateSettings())
+                        return;
+
+                if (val != null)
+                {
+                    var calc_val = (short)(Math.Round(val ?? 0, 2) * 100);
+                    if (calc_val == this.current_settings?.controller[index].power)
+                        return;
+
+                    this.current_settings.Value.controller[index].mode = 0; // PWM_MODE
+                    this.current_settings.Value.controller[index].power = calc_val;
+                }
+
+                // Write new config
+                var reportId = new byte[] { 0x03 };
+                byte[] reportdata = EndianAttribute.StructToBytes<AquacomputerStructs.Devices.Quadro.Settings>(this.current_settings.Value);
+                var crc = new Crc.CrcBase(Crc.CrcParameters.Crc16_USB).ComputeHash(reportdata);
+                data = reportId.Concat(reportdata).Concat(crc.Reverse()).ToArray();
+
+                if (hidDevice.WriteFeatureData(data))
+                {
+                    data = new byte[] { 0x2, 0, 0, 0, 0x2, 0, 0, 0, 0, 0x34, 0xc6 };
+                    hidDevice.Write(data);
+                }
+
+                Thread.Sleep(100);
+
+                // Read current settings
+                Settings_UpdateSettings(true);
+            }
+            finally
+            {
+                rwl.ReleaseWriterLock();
+            }
+        }
+
+        private void Settings_ResetControllerPower(int index)
+        {
+            //_logger.Log($"QuadroDevice.Settings_ResetControllerPower(index: {index})");
+            if (hidDevice == null)
+                return;
+
+            rwl.AcquireWriterLock(100);
+            try
+            {
+                if (this.current_settings != null && this.initial_settings != null)
+                    this.current_settings.Value.controller[index] = this.initial_settings.Value.controller[index];
+                else if (this.initial_settings != null)
+                    this.current_settings = this.initial_settings;
+            }
+            finally
+            {
+                rwl.ReleaseWriterLock();
+            }
+            Settings_SetControllerPower(index, null);
+        }
+    }
+}

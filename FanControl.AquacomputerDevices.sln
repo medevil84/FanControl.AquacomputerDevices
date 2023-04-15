@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.33502.453
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FanControl.AquacomputerDevices", "FanControl.AquacomputerDevices\FanControl.AquacomputerDevices.csproj", "{1A1898CD-FDCD-4DC6-B5BC-5A53A1904A55}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{1A1898CD-FDCD-4DC6-B5BC-5A53A1904A55}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1A1898CD-FDCD-4DC6-B5BC-5A53A1904A55}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1A1898CD-FDCD-4DC6-B5BC-5A53A1904A55}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1A1898CD-FDCD-4DC6-B5BC-5A53A1904A55}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {D6B2AA78-EA7B-4D9F-8869-E49F62F0BF21}
+	EndGlobalSection
+EndGlobal
