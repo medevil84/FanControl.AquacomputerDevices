@@ -15,8 +15,7 @@ namespace FanControl.AquacomputerDevices.Devices
         {
             yield return new HighFlowNextDevice();
             yield return new QuadroDevice();
-            // If you would like to test OCTO device, please uncomment this and recompile:
-            //yield return new OctoDevice();
+            yield return new OctoDevice();
         }
 
         public static IEnumerable<int> GetSupportedProductIds()

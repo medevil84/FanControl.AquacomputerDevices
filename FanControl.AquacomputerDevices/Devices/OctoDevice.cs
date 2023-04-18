@@ -50,56 +50,52 @@ namespace FanControl.AquacomputerDevices.Devices
             if (hidDevice == null)
                 return;
 
-            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Octo.sensor_data>("Fans0", "Octo Fan 1", () => this.Data_GetTemperature(() => this.sensor_data.fans[0].speed, 1.0f)));
-            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Octo.sensor_data>("Fans1", "Octo Fan 2", () => this.Data_GetTemperature(() => this.sensor_data.fans[1].speed, 1.0f)));
-            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Octo.sensor_data>("Fans2", "Octo Fan 3", () => this.Data_GetTemperature(() => this.sensor_data.fans[2].speed, 1.0f)));
-            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Octo.sensor_data>("Fans3", "Octo Fan 4", () => this.Data_GetTemperature(() => this.sensor_data.fans[3].speed, 1.0f)));
-            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Octo.sensor_data>("Fans4", "Octo Fan 5", () => this.Data_GetTemperature(() => this.sensor_data.fans[4].speed, 1.0f)));
-            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Octo.sensor_data>("Fans5", "Octo Fan 6", () => this.Data_GetTemperature(() => this.sensor_data.fans[5].speed, 1.0f)));
-            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Octo.sensor_data>("Fans6", "Octo Fan 7", () => this.Data_GetTemperature(() => this.sensor_data.fans[6].speed, 1.0f)));
-            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Octo.sensor_data>("Fans7", "Octo Fan 8", () => this.Data_GetTemperature(() => this.sensor_data.fans[7].speed, 1.0f)));
+            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Octo.sensor_data>("OctoDevice.Fans0", "Octo Fan 1", () => this.Data_GetTemperature(() => this.sensor_data.fans[0].speed, 1.0f)));
+            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Octo.sensor_data>("OctoDevice.Fans1", "Octo Fan 2", () => this.Data_GetTemperature(() => this.sensor_data.fans[1].speed, 1.0f)));
+            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Octo.sensor_data>("OctoDevice.Fans2", "Octo Fan 3", () => this.Data_GetTemperature(() => this.sensor_data.fans[2].speed, 1.0f)));
+            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Octo.sensor_data>("OctoDevice.Fans3", "Octo Fan 4", () => this.Data_GetTemperature(() => this.sensor_data.fans[3].speed, 1.0f)));
+            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Octo.sensor_data>("OctoDevice.Fans4", "Octo Fan 5", () => this.Data_GetTemperature(() => this.sensor_data.fans[4].speed, 1.0f)));
+            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Octo.sensor_data>("OctoDevice.Fans5", "Octo Fan 6", () => this.Data_GetTemperature(() => this.sensor_data.fans[5].speed, 1.0f)));
+            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Octo.sensor_data>("OctoDevice.Fans6", "Octo Fan 7", () => this.Data_GetTemperature(() => this.sensor_data.fans[6].speed, 1.0f)));
+            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Octo.sensor_data>("OctoDevice.Fans7", "Octo Fan 8", () => this.Data_GetTemperature(() => this.sensor_data.fans[7].speed, 1.0f)));
 
             // Value for this sensor should be checked!
-            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Octo.sensor_data>("Flow", "Octo Flow Sensor", () => this.Data_GetTemperature(() => this.sensor_data.flow)));
+            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Octo.sensor_data>("OctoDevice.Flow", "Octo Flow Sensor", () => this.Data_GetTemperature(() => this.sensor_data.flow)));
 
-            _container.TempSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Octo.sensor_data>("Temp0", "Octo Temperature 1", () => this.Data_GetTemperature(() => this.sensor_data.temperatures[0])));
-            _container.TempSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Octo.sensor_data>("Temp1", "Octo Temperature 2", () => this.Data_GetTemperature(() => this.sensor_data.temperatures[1])));
-            _container.TempSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Octo.sensor_data>("Temp2", "Octo Temperature 3", () => this.Data_GetTemperature(() => this.sensor_data.temperatures[2])));
-            _container.TempSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Octo.sensor_data>("Temp3", "Octo Temperature 4", () => this.Data_GetTemperature(() => this.sensor_data.temperatures[3])));
-            _container.TempSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Octo.sensor_data>("Temp0", "Octo Temperature 5", () => this.Data_GetTemperature(() => this.sensor_data.temperatures[4])));
-            _container.TempSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Octo.sensor_data>("Temp1", "Octo Temperature 6", () => this.Data_GetTemperature(() => this.sensor_data.temperatures[5])));
-            _container.TempSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Octo.sensor_data>("Temp2", "Octo Temperature 7", () => this.Data_GetTemperature(() => this.sensor_data.temperatures[6])));
-            _container.TempSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Octo.sensor_data>("Temp3", "Octo Temperature 8", () => this.Data_GetTemperature(() => this.sensor_data.temperatures[7])));
+            _container.TempSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Octo.sensor_data>("OctoDevice.Temp0", "Octo Temperature 1", () => this.Data_GetTemperature(() => this.sensor_data.temperatures[0])));
+            _container.TempSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Octo.sensor_data>("OctoDevice.Temp1", "Octo Temperature 2", () => this.Data_GetTemperature(() => this.sensor_data.temperatures[1])));
+            _container.TempSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Octo.sensor_data>("OctoDevice.Temp2", "Octo Temperature 3", () => this.Data_GetTemperature(() => this.sensor_data.temperatures[2])));
+            _container.TempSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Octo.sensor_data>("OctoDevice.Temp3", "Octo Temperature 4", () => this.Data_GetTemperature(() => this.sensor_data.temperatures[3])));
 
-            _container.ControlSensors.Add(new DeviceBaseControlSensor<AquacomputerStructs.Devices.Octo.Settings>("Power0", "Octo Controller Power 1", 
+            _container.ControlSensors.Add(new DeviceBaseControlSensor<AquacomputerStructs.Devices.Octo.Settings>("OctoDevice.Power0", "Octo Controller Power 1", 
                 () => this.Settings_GetControllerPower(0), null,
                 (x) => this.Settings_SetControllerPower(0, x),
                 () => this.Settings_ResetControllerPower(0)));
-            _container.ControlSensors.Add(new DeviceBaseControlSensor<AquacomputerStructs.Devices.Octo.Settings>("Power1", "Octo Controller Power 2",
+            _container.ControlSensors.Add(new DeviceBaseControlSensor<AquacomputerStructs.Devices.Octo.Settings>("OctoDevice.Power1", "Octo Controller Power 2",
                 () => this.Settings_GetControllerPower(1), null,
                 (x) => this.Settings_SetControllerPower(1, x),
                 () => this.Settings_ResetControllerPower(1)));
-            _container.ControlSensors.Add(new DeviceBaseControlSensor<AquacomputerStructs.Devices.Octo.Settings>("Power2", "Octo Controller Power 3",
+            _container.ControlSensors.Add(new DeviceBaseControlSensor<AquacomputerStructs.Devices.Octo.Settings>("OctoDevice.Power2", "Octo Controller Power 3",
                 () => this.Settings_GetControllerPower(2), null,
                 (x) => this.Settings_SetControllerPower(2, x),
                 () => this.Settings_ResetControllerPower(2)));
-            _container.ControlSensors.Add(new DeviceBaseControlSensor<AquacomputerStructs.Devices.Octo.Settings>("Power3", "Octo Controller Power 4",
+            _container.ControlSensors.Add(new DeviceBaseControlSensor<AquacomputerStructs.Devices.Octo.Settings>("OctoDevice.Power3", "Octo Controller Power 4",
                 () => this.Settings_GetControllerPower(3), null,
                 (x) => this.Settings_SetControllerPower(3, x),
                 () => this.Settings_ResetControllerPower(3)));
-            _container.ControlSensors.Add(new DeviceBaseControlSensor<AquacomputerStructs.Devices.Octo.Settings>("Power4", "Octo Controller Power 5",
+            _container.ControlSensors.Add(new DeviceBaseControlSensor<AquacomputerStructs.Devices.Octo.Settings>("OctoDevice.Power4", "Octo Controller Power 5",
                 () => this.Settings_GetControllerPower(4), null,
                 (x) => this.Settings_SetControllerPower(4, x),
                 () => this.Settings_ResetControllerPower(4)));
-            _container.ControlSensors.Add(new DeviceBaseControlSensor<AquacomputerStructs.Devices.Octo.Settings>("Power5", "Octo Controller Power 6",
+            _container.ControlSensors.Add(new DeviceBaseControlSensor<AquacomputerStructs.Devices.Octo.Settings>("OctoDevice.Power5", "Octo Controller Power 6",
                 () => this.Settings_GetControllerPower(5), null,
                 (x) => this.Settings_SetControllerPower(5, x),
                 () => this.Settings_ResetControllerPower(5)));
-            _container.ControlSensors.Add(new DeviceBaseControlSensor<AquacomputerStructs.Devices.Octo.Settings>("Power6", "Octo Controller Power 7",
+            _container.ControlSensors.Add(new DeviceBaseControlSensor<AquacomputerStructs.Devices.Octo.Settings>("OctoDevice.Power6", "Octo Controller Power 7",
                 () => this.Settings_GetControllerPower(6), null,
                 (x) => this.Settings_SetControllerPower(6, x),
                 () => this.Settings_ResetControllerPower(6)));
-            _container.ControlSensors.Add(new DeviceBaseControlSensor<AquacomputerStructs.Devices.Octo.Settings>("Power7", "Octo Controller Power 8",
+            _container.ControlSensors.Add(new DeviceBaseControlSensor<AquacomputerStructs.Devices.Octo.Settings>("OctoDevice.Power7", "Octo Controller Power 8",
                 () => this.Settings_GetControllerPower(7), null,
                 (x) => this.Settings_SetControllerPower(7, x),
                 () => this.Settings_ResetControllerPower(7)));

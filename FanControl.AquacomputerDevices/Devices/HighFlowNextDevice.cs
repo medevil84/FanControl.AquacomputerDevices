@@ -37,11 +37,11 @@ namespace FanControl.AquacomputerDevices.Devices
             if (hidDevice == null)
                 return;
 
-            _container.TempSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.HighFlowNext.sensor_data>("TemperatureWater", "Water Temperature", () => this.Data_GetTemperature(() => sensor_data.temperature_water)));
-            _container.TempSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.HighFlowNext.sensor_data>("TemperatureExt", "External Water Temperature", () => this.Data_GetTemperature(() => sensor_data.temperature_ext)));
-            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.HighFlowNext.sensor_data>("Flow", "Flow", () => this.Data_GetTemperature(() => sensor_data.flow, 10.0f)));
-            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.HighFlowNext.sensor_data>("WaterQuality", "Water Quality", () => this.Data_GetTemperature(() => sensor_data.water_quality)));
-            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.HighFlowNext.sensor_data>("Conductivity", "Conductivity", () => this.Data_GetTemperature(() => sensor_data.conductivity, 10.0f)));
+            _container.TempSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.HighFlowNext.sensor_data>("HighFlowNextDevice.TemperatureWater", "Water Temperature", () => this.Data_GetTemperature(() => sensor_data.temperature_water)));
+            _container.TempSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.HighFlowNext.sensor_data>("HighFlowNextDevice.TemperatureExt", "External Water Temperature", () => this.Data_GetTemperature(() => sensor_data.temperature_ext)));
+            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.HighFlowNext.sensor_data>("HighFlowNextDevice.Flow", "Flow", () => this.Data_GetTemperature(() => sensor_data.flow, 10.0f)));
+            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.HighFlowNext.sensor_data>("HighFlowNextDevice.WaterQuality", "Water Quality", () => this.Data_GetTemperature(() => sensor_data.water_quality)));
+            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.HighFlowNext.sensor_data>("HighFlowNextDevice.Conductivity", "Conductivity", () => this.Data_GetTemperature(() => sensor_data.conductivity, 10.0f)));
 
         }
 

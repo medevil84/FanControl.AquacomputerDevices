@@ -47,32 +47,32 @@ namespace FanControl.AquacomputerDevices.Devices
             if (hidDevice == null)
                 return;
 
-            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Quadro.sensor_data>("Fans0", "Quadro Fan 1", () => this.Data_GetTemperature(() => this.sensor_data.fans[0].speed, 1.0f)));
-            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Quadro.sensor_data>("Fans1", "Quadro Fan 2", () => this.Data_GetTemperature(() => this.sensor_data.fans[1].speed, 1.0f)));
-            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Quadro.sensor_data>("Fans2", "Quadro Fan 3", () => this.Data_GetTemperature(() => this.sensor_data.fans[2].speed, 1.0f)));
-            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Quadro.sensor_data>("Fans3", "Quadro Fan 4", () => this.Data_GetTemperature(() => this.sensor_data.fans[3].speed, 1.0f)));
+            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Quadro.sensor_data>("QuadroDevice.Fans0", "Quadro Fan 1", () => this.Data_GetTemperature(() => this.sensor_data.fans[0].speed, 1.0f)));
+            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Quadro.sensor_data>("QuadroDevice.Fans1", "Quadro Fan 2", () => this.Data_GetTemperature(() => this.sensor_data.fans[1].speed, 1.0f)));
+            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Quadro.sensor_data>("QuadroDevice.Fans2", "Quadro Fan 3", () => this.Data_GetTemperature(() => this.sensor_data.fans[2].speed, 1.0f)));
+            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Quadro.sensor_data>("QuadroDevice.Fans3", "Quadro Fan 4", () => this.Data_GetTemperature(() => this.sensor_data.fans[3].speed, 1.0f)));
 
             // Value for this sensor should be checked!
-            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Quadro.sensor_data>("Flow", "Quadro Flow Sensor", () => this.Data_GetTemperature(() => this.sensor_data.flow)));
+            _container.FanSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Quadro.sensor_data>("QuadroDevice.Flow", "Quadro Flow Sensor", () => this.Data_GetTemperature(() => this.sensor_data.flow)));
 
-            _container.TempSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Quadro.sensor_data>("Temp0", "Quadro Temperature 1", () => this.Data_GetTemperature(() => this.sensor_data.temperatures[0])));
-            _container.TempSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Quadro.sensor_data>("Temp1", "Quadro Temperature 2", () => this.Data_GetTemperature(() => this.sensor_data.temperatures[1])));
-            _container.TempSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Quadro.sensor_data>("Temp2", "Quadro Temperature 3", () => this.Data_GetTemperature(() => this.sensor_data.temperatures[2])));
-            _container.TempSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Quadro.sensor_data>("Temp3", "Quadro Temperature 4", () => this.Data_GetTemperature(() => this.sensor_data.temperatures[3])));
+            _container.TempSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Quadro.sensor_data>("QuadroDevice.Temp0", "Quadro Temperature 1", () => this.Data_GetTemperature(() => this.sensor_data.temperatures[0])));
+            _container.TempSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Quadro.sensor_data>("QuadroDevice.Temp1", "Quadro Temperature 2", () => this.Data_GetTemperature(() => this.sensor_data.temperatures[1])));
+            _container.TempSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Quadro.sensor_data>("QuadroDevice.Temp2", "Quadro Temperature 3", () => this.Data_GetTemperature(() => this.sensor_data.temperatures[2])));
+            _container.TempSensors.Add(new DeviceBaseSensor<AquacomputerStructs.Devices.Quadro.sensor_data>("QuadroDevice.Temp3", "Quadro Temperature 4", () => this.Data_GetTemperature(() => this.sensor_data.temperatures[3])));
             
-            _container.ControlSensors.Add(new DeviceBaseControlSensor<AquacomputerStructs.Devices.Quadro.Settings>("Power0", "Quadro Controller Power 1", 
+            _container.ControlSensors.Add(new DeviceBaseControlSensor<AquacomputerStructs.Devices.Quadro.Settings>("QuadroDevice.Power0", "Quadro Controller Power 1", 
                 () => this.Settings_GetControllerPower(0), null,
                 (x) => this.Settings_SetControllerPower(0, x),
                 () => this.Settings_ResetControllerPower(0)));
-            _container.ControlSensors.Add(new DeviceBaseControlSensor<AquacomputerStructs.Devices.Quadro.Settings>("Power1", "Quadro Controller Power 2",
+            _container.ControlSensors.Add(new DeviceBaseControlSensor<AquacomputerStructs.Devices.Quadro.Settings>("QuadroDevice.Power1", "Quadro Controller Power 2",
                 () => this.Settings_GetControllerPower(1), null,
                 (x) => this.Settings_SetControllerPower(1, x),
                 () => this.Settings_ResetControllerPower(1)));
-            _container.ControlSensors.Add(new DeviceBaseControlSensor<AquacomputerStructs.Devices.Quadro.Settings>("Power2", "Quadro Controller Power 3",
+            _container.ControlSensors.Add(new DeviceBaseControlSensor<AquacomputerStructs.Devices.Quadro.Settings>("QuadroDevice.Power2", "Quadro Controller Power 3",
                 () => this.Settings_GetControllerPower(2), null,
                 (x) => this.Settings_SetControllerPower(2, x),
                 () => this.Settings_ResetControllerPower(2)));
-            _container.ControlSensors.Add(new DeviceBaseControlSensor<AquacomputerStructs.Devices.Quadro.Settings>("Power3", "Quadro Controller Power 4",
+            _container.ControlSensors.Add(new DeviceBaseControlSensor<AquacomputerStructs.Devices.Quadro.Settings>("QuadroDevice.Power3", "Quadro Controller Power 4",
                 () => this.Settings_GetControllerPower(3), null,
                 (x) => this.Settings_SetControllerPower(3, x),
                 () => this.Settings_ResetControllerPower(3)));
