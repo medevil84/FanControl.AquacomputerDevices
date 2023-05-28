@@ -2,11 +2,6 @@
 using FanControl.Plugins;
 using HidLibrary;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace FanControl.AquacomputerDevices.Devices
 {
@@ -14,7 +9,6 @@ namespace FanControl.AquacomputerDevices.Devices
     {
         private HidDevice hidDevice = null;
         private IPluginLogger _logger;
-        private ReaderWriterLock rwl;
         private AquacomputerStructs.Devices.HighFlowNext.sensor_data sensor_data;
 
         public int GetProductId() => 0xF012;
@@ -26,7 +20,6 @@ namespace FanControl.AquacomputerDevices.Devices
             if (hidDevice == null)
             {
                 hidDevice = device;
-                rwl = new ReaderWriterLock();
             }
             return this;
         }
@@ -57,52 +50,35 @@ namespace FanControl.AquacomputerDevices.Devices
             if (hidDevice == null)
                 return;
 
-            rwl.AcquireWriterLock(100);
-            try
-            {
-                var deviceData = hidDevice.Read(500);
+            var deviceData = hidDevice.Read(500);
 
-                if (deviceData != null && deviceData.Status == HidLibrary.HidDeviceData.ReadStatus.Success)
-                {
-                    int offset = 0;
-                    EndianAttribute.GetStructAtOffset<AquacomputerStructs.Common.device_header>(deviceData.Data, ref offset);
-                    EndianAttribute.GetStructAtOffset<AquacomputerStructs.Devices.HighFlowNext.device_status>(deviceData.Data, ref offset);
-                    sensor_data = EndianAttribute.GetStructAtOffset<AquacomputerStructs.Devices.HighFlowNext.sensor_data>(deviceData.Data, ref offset);
-                }
-            }
-            finally
+            if (deviceData != null && deviceData.Status == HidLibrary.HidDeviceData.ReadStatus.Success)
             {
-                rwl.ReleaseWriterLock();
+                int offset = 0;
+                EndianAttribute.GetStructAtOffset<AquacomputerStructs.Common.device_header>(deviceData.Data, ref offset);
+                EndianAttribute.GetStructAtOffset<AquacomputerStructs.Devices.HighFlowNext.device_status>(deviceData.Data, ref offset);
+                sensor_data = EndianAttribute.GetStructAtOffset<AquacomputerStructs.Devices.HighFlowNext.sensor_data>(deviceData.Data, ref offset);
             }
         }
 
         private float? Data_GetTemperature(Func<short> temp, float ratio = 100.0f)
-        {
-            short val = (short)Data_GetReadLockLambda(() => (float)temp());
-            if (val == short.MaxValue)
-                return 0;
-
-            return val / ratio;
-        }
-
-        private float? Data_GetReadLockLambda(Func<float?> x)
         {
             if (hidDevice == null)
                 return null;
 
             try
             {
-                rwl.AcquireReaderLock(100);
-                try
-                {
-                    return x();
-                }
-                finally
-                {
-                    rwl.ReleaseReaderLock();
-                }
+                short val = temp();
+                if (val == short.MaxValue)
+                    return 0;
+
+                return val / ratio;
             }
-            catch (ApplicationException) { }
+            catch (ApplicationException e)
+            {
+                _logger.Log("Data_GetTemperature() ApplicationException: " + e);
+            }
+            
             return null;
         }
     }

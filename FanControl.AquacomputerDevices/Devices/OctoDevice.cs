@@ -2,14 +2,8 @@
 using FanControl.Plugins;
 using HidLibrary;
 using System;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
-using System.Reflection;
-using System.Runtime;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace FanControl.AquacomputerDevices.Devices
 {
@@ -20,7 +14,6 @@ namespace FanControl.AquacomputerDevices.Devices
     {
         private HidDevice hidDevice = null;
         private IPluginLogger _logger;
-        private ReaderWriterLock rwl;
         private AquacomputerStructs.Devices.Octo.Settings? initial_settings = null;
         private AquacomputerStructs.Devices.Octo.Settings? current_settings = null;
         private AquacomputerStructs.Devices.Octo.sensor_data sensor_data;
@@ -36,7 +29,6 @@ namespace FanControl.AquacomputerDevices.Devices
             if (hidDevice == null)
             {
                 hidDevice = device;
-                rwl = new ReaderWriterLock();
 
                 hidDevice.OpenDevice();
                 Update();
@@ -113,37 +105,20 @@ namespace FanControl.AquacomputerDevices.Devices
             if (hidDevice == null)
                 return;
 
-            rwl.AcquireWriterLock(100);
-            try
-            {
-                var deviceData = hidDevice.Read(500);
+            var deviceData = hidDevice.Read(500);
 
-                if (deviceData != null && deviceData.Status == HidLibrary.HidDeviceData.ReadStatus.Success)
-                {
-                    int offset = 0;
-                    EndianAttribute.GetStructAtOffset<AquacomputerStructs.Common.device_header>(deviceData.Data, ref offset);
-                    EndianAttribute.GetStructAtOffset<AquacomputerStructs.Devices.Octo.device_status>(deviceData.Data, ref offset);
-                    sensor_data = EndianAttribute.GetStructAtOffset<AquacomputerStructs.Devices.Octo.sensor_data>(deviceData.Data, ref offset);
-                }
-
-                Settings_UpdateSettings();
-            }
-            finally
+            if (deviceData != null && deviceData.Status == HidLibrary.HidDeviceData.ReadStatus.Success)
             {
-                rwl.ReleaseWriterLock();
+                int offset = 0;
+                EndianAttribute.GetStructAtOffset<AquacomputerStructs.Common.device_header>(deviceData.Data, ref offset);
+                EndianAttribute.GetStructAtOffset<AquacomputerStructs.Devices.Octo.device_status>(deviceData.Data, ref offset);
+                sensor_data = EndianAttribute.GetStructAtOffset<AquacomputerStructs.Devices.Octo.sensor_data>(deviceData.Data, ref offset);
             }
+
+            Settings_UpdateSettings();
         }
 
         private float? Data_GetTemperature(Func<short> temp, float ratio = 100.0f)
-        {
-            short val = (short)Data_GetReadLockLambda(() => (float)temp());
-            if (val == short.MaxValue)
-                return 0;
-
-            return val / ratio;
-        }
-
-        private float? Data_GetReadLockLambda(Func<float?> x)
         {
             //_logger.Log($"OctoDevice.Data_GetReadLockLambda(x: {x.Method})");
             if (hidDevice == null)
@@ -151,21 +126,18 @@ namespace FanControl.AquacomputerDevices.Devices
 
             try
             {
-                rwl.AcquireReaderLock(100);
-                try
-                {
-                    return x();
-                }
-                finally
-                {
-                    rwl.ReleaseReaderLock();
-                }
+                short val = temp();
+                if (val == short.MaxValue)
+                    return 0;
+
+                return val / ratio;
             }
-            catch (ApplicationException) { }
+            catch (ApplicationException e)
+            {
+                _logger.Log("Data_GetTemperature() ApplicationException: " + e);
+            }
             return null;
         }
-
-
 
         private float? Settings_GetControllerPower(int index)
         {
@@ -178,17 +150,12 @@ namespace FanControl.AquacomputerDevices.Devices
                 if (this.current_settings == null)
                     return null;
 
-                rwl.AcquireReaderLock(100);
-                try
-                {
-                    return this.current_settings?.controller[index].power / 100.0f;
-                }
-                finally
-                {
-                    rwl.ReleaseReaderLock();
-                }
+                return this.current_settings?.controller[index].power / 100.0f;
             }
-            catch (ApplicationException) { }
+            catch (ApplicationException e)
+            {
+                _logger.Log("Settings_GetControllerPower() ApplicationException: " + e);
+            }
             return null;
         }
 
@@ -225,47 +192,39 @@ namespace FanControl.AquacomputerDevices.Devices
             if (hidDevice == null)
                 return;
 
-            rwl.AcquireWriterLock(100);
-            try
+            byte[] data;
+
+            // Update current settings if never read
+            if (this.current_settings == null)
+                if (!Settings_UpdateSettings())
+                    return;
+
+            if (val != null)
             {
-                byte[] data;
+                var calc_val = (short)(Math.Round(val ?? 0, 2) * 100);
+                if (calc_val == this.current_settings?.controller[index].power)
+                    return;
 
-                // Update current settings if never read
-                if (this.current_settings == null)
-                    if (!Settings_UpdateSettings())
-                        return;
-
-                if (val != null)
-                {
-                    var calc_val = (short)(Math.Round(val ?? 0, 2) * 100);
-                    if (calc_val == this.current_settings?.controller[index].power)
-                        return;
-
-                    this.current_settings.Value.controller[index].mode = 0; // PWM_MODE
-                    this.current_settings.Value.controller[index].power = calc_val;
-                }
-
-                // Write new config
-                var reportId = new byte[] { 0x03 };
-                byte[] reportdata = EndianAttribute.StructToBytes<AquacomputerStructs.Devices.Octo.Settings>(this.current_settings.Value);
-                var crc = new Crc.CrcBase(Crc.CrcParameters.Crc16_USB).ComputeHash(reportdata);
-                data = reportId.Concat(reportdata).Concat(crc.Reverse()).ToArray();
-
-                if (hidDevice.WriteFeatureData(data))
-                {
-                    data = new byte[] { 0x2, 0, 0, 0, 0x2, 0, 0, 0, 0, 0x34, 0xc6 };
-                    hidDevice.Write(data);
-                }
-
-                Thread.Sleep(100);
-
-                // Read current settings
-                Settings_UpdateSettings(true);
+                this.current_settings.Value.controller[index].mode = 0; // PWM_MODE
+                this.current_settings.Value.controller[index].power = calc_val;
             }
-            finally
+
+            // Write new config
+            var reportId = new byte[] { 0x03 };
+            byte[] reportdata = EndianAttribute.StructToBytes<AquacomputerStructs.Devices.Octo.Settings>(this.current_settings.Value);
+            var crc = new Crc.CrcBase(Crc.CrcParameters.Crc16_USB).ComputeHash(reportdata);
+            data = reportId.Concat(reportdata).Concat(crc.Reverse()).ToArray();
+
+            if (hidDevice.WriteFeatureData(data))
             {
-                rwl.ReleaseWriterLock();
+                data = new byte[] { 0x2, 0, 0, 0, 0x2, 0, 0, 0, 0, 0x34, 0xc6 };
+                hidDevice.Write(data);
             }
+
+            Thread.Sleep(100);
+
+            // Read current settings
+            Settings_UpdateSettings(true);
         }
 
         private void Settings_ResetControllerPower(int index)
@@ -274,18 +233,11 @@ namespace FanControl.AquacomputerDevices.Devices
             if (hidDevice == null)
                 return;
 
-            rwl.AcquireWriterLock(100);
-            try
-            {
-                if (this.current_settings != null && this.initial_settings != null)
-                    this.current_settings.Value.controller[index] = this.initial_settings.Value.controller[index];
-                else if (this.initial_settings != null)
-                    this.current_settings = this.initial_settings;
-            }
-            finally
-            {
-                rwl.ReleaseWriterLock();
-            }
+            if (this.current_settings != null && this.initial_settings != null)
+                this.current_settings.Value.controller[index] = this.initial_settings.Value.controller[index];
+            else if (this.initial_settings != null)
+                this.current_settings = this.initial_settings;
+            
             Settings_SetControllerPower(index, null);
         }
     }
