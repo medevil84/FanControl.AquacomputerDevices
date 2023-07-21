@@ -13,9 +13,11 @@ namespace FanControl.AquacomputerDevices.Devices
     {
         int GetProductId();
 
+        String GetDevicePath();
+
         IAquacomputerDevice AssignDevice(HidDevice device, IPluginLogger logger);
 
-        void Load(IPluginSensorsContainer _container);
+        void Load(IPluginSensorsContainer _container, int index = 0);
 
         void Unload();
 
