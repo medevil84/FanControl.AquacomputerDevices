@@ -54,12 +54,14 @@
     <Compile Include="Devices\OctoDevice.cs" />
     <Compile Include="Devices\QuadroDevice.cs" />
     <Compile Include="Devices\HighFlowNextDevice.cs" />
+	<Compile Include="Devices\FarbwerkDevice.cs" />
     <Compile Include="CrcDotNet\CrcBase.cs" />
     <Compile Include="CrcDotNet\CrcConfigurationException.cs" />
     <Compile Include="CrcDotNet\CrcParameters.cs" />
     <Compile Include="DataStructs\Common.cs" />
     <Compile Include="DataStructs\HighFlowNext.cs" />
     <Compile Include="DataStructs\Quadro.cs" />
+	<Compile Include="DataStructs\Farbwerk.cs" />
     <Compile Include="Endianess.cs" />
     <Compile Include="Devices\IAquacomputerDevice.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
