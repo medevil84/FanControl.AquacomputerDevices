@@ -1,6 +1,6 @@
 
 # FanControl.AquacomputerDevices
-[FanControl](https://github.com/Rem0o/FanControl.Releases) Plugin for the Aquacomputer Devices (HighFlowNext, Quadro and *Highly Experimental* Octo)
+[FanControl](https://github.com/Rem0o/FanControl.Releases) Plugin for the Aquacomputer Devices (HighFlowNext, Quadro and *Highly Experimental* Octo / Farbwerk)
 
 This plugin will interface directly with the usb devices, so *aquasuite is not needed*.
 > This code has been tested with firmware version >= 1012 of the **HighFlowNext** device.
