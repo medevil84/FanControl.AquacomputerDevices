@@ -16,6 +16,7 @@ namespace FanControl.AquacomputerDevices.Devices
             yield return new HighFlowNextDevice();
             yield return new QuadroDevice();
             yield return new OctoDevice();
+            yield return new FarbwerkDevice();
         }
 
         public static IEnumerable<int> GetSupportedProductIds()
