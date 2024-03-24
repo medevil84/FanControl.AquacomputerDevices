@@ -7,6 +7,7 @@ This plugin will interface directly with the usb devices, so *aquasuite is not n
 
 > This code has been tested with firmware version == 1032 of the **Quadro** Device.
 
+> This code has been tested with firmware version == 1025 of the **Farbwerk** Device (thanks to [@thomasfifer ](https://github.com/thomasfifer))
 
 ## USE THIS SOFTWARE AT YOUR OWN RISK!
 The _FanControl.AquacomputerDevices_ main developer is running this software, without any negative side effects. However, it is a **highly experimental software**, and it is based on reverse engineering only.
