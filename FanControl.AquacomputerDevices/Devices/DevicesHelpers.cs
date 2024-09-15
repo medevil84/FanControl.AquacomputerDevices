@@ -24,9 +24,9 @@ namespace FanControl.AquacomputerDevices.Devices
             return GetDevices().Select(x => x.GetProductId());
         }
 
-        public static IAquacomputerDevice GetDevice(HidLibrary.HidDevice id, IPluginLogger logger)
+        public static IAquacomputerDevice GetDevice(HidSharp.HidDevice id, IPluginLogger logger)
         {
-            return GetDevices().FirstOrDefault(x => x.GetProductId().Equals(id.Attributes.ProductId)).AssignDevice(id, logger);
+            return GetDevices().FirstOrDefault(x => x.GetProductId().Equals(id.ProductID)).AssignDevice(id, logger);
         }
     }
 

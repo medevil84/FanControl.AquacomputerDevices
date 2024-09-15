@@ -33,7 +33,8 @@ namespace FanControl.AquacomputerDevices
         public void Initialize()
         {
             _logger.Log("AquacomputerPlugin: Initializing.");
-            devices = HidLibrary.HidDevices.Enumerate(0x0C70, AllDevices.GetSupportedProductIds().ToArray())
+            devices = HidSharp.DeviceList.Local.GetHidDevices(0x0C70)
+                .Where(x => AllDevices.GetSupportedProductIds().Contains(x.ProductID))
                 .Select(x => AllDevices.GetDevice(x, _logger))
                 .GroupBy(x => x.GetType())
                 .SelectMany(x => x

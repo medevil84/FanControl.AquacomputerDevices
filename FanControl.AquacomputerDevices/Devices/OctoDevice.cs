@@ -1,6 +1,5 @@
 ﻿using AquacomputerStructs.Helpers;
 using FanControl.Plugins;
-using HidLibrary;
 using System;
 using System.Linq;
 using System.Threading;
@@ -12,7 +11,8 @@ namespace FanControl.AquacomputerDevices.Devices
     /// </summary>
     internal class OctoDevice : IAquacomputerDevice
     {
-        private HidDevice hidDevice = null;
+        private HidSharp.HidDevice hidDevice = null;
+        private HidSharp.HidStream hidStream = null;
         private IPluginLogger _logger;
         private AquacomputerStructs.Devices.Octo.Settings? initial_settings = null;
         private AquacomputerStructs.Devices.Octo.Settings? current_settings = null;
@@ -23,15 +23,15 @@ namespace FanControl.AquacomputerDevices.Devices
         public int GetProductId() => 0xF011;
         public string GetDevicePath() => hidDevice?.DevicePath;
 
-        public IAquacomputerDevice AssignDevice(HidDevice device, IPluginLogger logger)
+        public IAquacomputerDevice AssignDevice(HidSharp.HidDevice device, IPluginLogger logger)
         {
             _logger = logger;
             _logger.Log($"OctoDevice.AssignDevice(device: {device}, logger: {logger})");
             if (hidDevice == null)
             {
                 hidDevice = device;
+                hidStream = hidDevice.Open();
 
-                hidDevice.OpenDevice();
                 Update();
             }
             return this;
@@ -97,23 +97,24 @@ namespace FanControl.AquacomputerDevices.Devices
         public void Unload()
         {
             _logger.Log($"OctoDevice.Unload()");
-            hidDevice?.CloseDevice();
+            hidStream?.Close();
+            hidStream = null;
             hidDevice = null;
         }
 
         public void Update()
         {
-            if (hidDevice == null)
+            if (hidDevice == null || !hidStream?.CanRead == true)
                 return;
 
-            var deviceData = hidDevice.Read(500);
+            var deviceData = hidStream.Read();
 
-            if (deviceData != null && deviceData.Status == HidLibrary.HidDeviceData.ReadStatus.Success)
+            if (deviceData != null)
             {
                 int offset = 0;
-                EndianAttribute.GetStructAtOffset<AquacomputerStructs.Common.device_header>(deviceData.Data, ref offset);
-                EndianAttribute.GetStructAtOffset<AquacomputerStructs.Devices.Octo.device_status>(deviceData.Data, ref offset);
-                sensor_data = EndianAttribute.GetStructAtOffset<AquacomputerStructs.Devices.Octo.sensor_data>(deviceData.Data, ref offset);
+                EndianAttribute.GetStructAtOffset<AquacomputerStructs.Common.device_header>(deviceData, ref offset);
+                EndianAttribute.GetStructAtOffset<AquacomputerStructs.Devices.Octo.device_status>(deviceData, ref offset);
+                sensor_data = EndianAttribute.GetStructAtOffset<AquacomputerStructs.Devices.Octo.sensor_data>(deviceData, ref offset);
             }
 
             Settings_UpdateSettings();
@@ -170,8 +171,12 @@ namespace FanControl.AquacomputerDevices.Devices
                 return true;
 
             // Read current settings
-            if (hidDevice.ReadFeatureData(out byte[] data, 3))
+            try
             {
+                byte[] data = new byte[hidDevice.GetMaxFeatureReportLength() + 1];
+                data[0] = 3;
+                hidStream.GetFeature(data);
+
                 this.current_settings = EndianAttribute.GetStructAtOffset<AquacomputerStructs.Devices.Octo.Settings>(data, ref offset);
                 if (this.initial_settings == null)
                     this.initial_settings = current_settings;
@@ -179,9 +184,9 @@ namespace FanControl.AquacomputerDevices.Devices
                 this.last_settings_read = DateTime.Now;
                 return true;
             }
-            else
+            catch (Exception ex)
             {
-                _logger.Log("OctoDevice: Failed to read settings from device.");
+                _logger.Log($"OctoDevice: Failed to read settings from device: {ex}");
                 //Debugger.Launch();
                 return false;
             }
@@ -216,10 +221,16 @@ namespace FanControl.AquacomputerDevices.Devices
             var crc = new Crc.CrcBase(Crc.CrcParameters.Crc16_USB).ComputeHash(reportdata);
             data = reportId.Concat(reportdata).Concat(crc.Reverse()).ToArray();
 
-            if (hidDevice.WriteFeatureData(data))
+            try
             {
+                hidStream.SetFeature(data);
+
                 data = new byte[] { 0x2, 0, 0, 0, 0x2, 0, 0, 0, 0, 0x34, 0xc6 };
-                hidDevice.Write(data);
+                hidStream.Write(data);
+            }
+            catch (Exception ex)
+            {
+                _logger.Log($"OctoDevice.Settings_SetControllerPower() error: {ex}");
             }
 
             Thread.Sleep(100);

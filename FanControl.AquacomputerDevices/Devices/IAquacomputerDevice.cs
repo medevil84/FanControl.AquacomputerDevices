@@ -1,5 +1,4 @@
 ﻿using FanControl.Plugins;
-using HidLibrary;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,7 +14,7 @@ namespace FanControl.AquacomputerDevices.Devices
 
         String GetDevicePath();
 
-        IAquacomputerDevice AssignDevice(HidDevice device, IPluginLogger logger);
+        IAquacomputerDevice AssignDevice(HidSharp.HidDevice device, IPluginLogger logger);
 
         void Load(IPluginSensorsContainer _container, int index = 0);
 

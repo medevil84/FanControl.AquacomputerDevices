@@ -1,13 +1,13 @@
 ﻿using AquacomputerStructs.Helpers;
 using FanControl.Plugins;
-using HidLibrary;
 using System;
 
 namespace FanControl.AquacomputerDevices.Devices
 {
     internal class HighFlowNextDevice : IAquacomputerDevice
     {
-        private HidDevice hidDevice = null;
+        private HidSharp.HidDevice hidDevice = null;
+        private HidSharp.HidStream hidStream = null;
         private IPluginLogger _logger;
         private AquacomputerStructs.Devices.HighFlowNext.sensor_data sensor_data;
 
@@ -15,13 +15,16 @@ namespace FanControl.AquacomputerDevices.Devices
 
         public string GetDevicePath() => hidDevice?.DevicePath;
 
-        public IAquacomputerDevice AssignDevice(HidDevice device, IPluginLogger logger)
+        public IAquacomputerDevice AssignDevice(HidSharp.HidDevice device, IPluginLogger logger)
         {
             _logger = logger;
             _logger.Log($"HighFlowNextDevice.AssignDevice(device: {device}, logger: {logger})");
             if (hidDevice == null)
             {
                 hidDevice = device;
+                hidStream = hidDevice.Open();
+
+                Update();
             }
             return this;
         }
@@ -43,23 +46,24 @@ namespace FanControl.AquacomputerDevices.Devices
         public void Unload()
         {
             _logger.Log($"HighFlowNextDevice.Unload()");
-            hidDevice?.CloseDevice();
+            hidStream?.Close();
+            hidStream = null;
             hidDevice = null;
         }
 
         public void Update()
         {
-            if (hidDevice == null)
+            if (hidDevice == null || !hidStream?.CanRead == true)
                 return;
 
-            var deviceData = hidDevice.Read(500);
+            var deviceData = hidStream.Read();
 
-            if (deviceData != null && deviceData.Status == HidLibrary.HidDeviceData.ReadStatus.Success)
+            if (deviceData != null)
             {
                 int offset = 0;
-                EndianAttribute.GetStructAtOffset<AquacomputerStructs.Common.device_header>(deviceData.Data, ref offset);
-                EndianAttribute.GetStructAtOffset<AquacomputerStructs.Devices.HighFlowNext.device_status>(deviceData.Data, ref offset);
-                sensor_data = EndianAttribute.GetStructAtOffset<AquacomputerStructs.Devices.HighFlowNext.sensor_data>(deviceData.Data, ref offset);
+                EndianAttribute.GetStructAtOffset<AquacomputerStructs.Common.device_header>(deviceData, ref offset);
+                EndianAttribute.GetStructAtOffset<AquacomputerStructs.Devices.HighFlowNext.device_status>(deviceData, ref offset);
+                sensor_data = EndianAttribute.GetStructAtOffset<AquacomputerStructs.Devices.HighFlowNext.sensor_data>(deviceData, ref offset);
             }
         }
 
