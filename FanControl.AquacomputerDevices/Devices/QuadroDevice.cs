@@ -9,7 +9,7 @@ namespace FanControl.AquacomputerDevices.Devices
     internal class QuadroDevice : IAquacomputerDevice
     {
         private HidSharp.HidDevice hidDevice = null;
-        private HidSharp.HidStream hidStream = null;
+        private CachedHidStream hidStream = null;
         private IPluginLogger _logger;
         private AquacomputerStructs.Devices.Quadro.Settings? initial_settings = null;
         private AquacomputerStructs.Devices.Quadro.Settings? current_settings = null;
@@ -27,7 +27,7 @@ namespace FanControl.AquacomputerDevices.Devices
             if (hidDevice == null)
             {
                 hidDevice = device;
-                hidStream = hidDevice.Open();
+                hidStream = new CachedHidStream(hidDevice.Open());
 
                 Update();
             }

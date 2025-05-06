@@ -12,7 +12,7 @@ namespace FanControl.AquacomputerDevices.Devices
     internal class OctoDevice : IAquacomputerDevice
     {
         private HidSharp.HidDevice hidDevice = null;
-        private HidSharp.HidStream hidStream = null;
+        private CachedHidStream hidStream = null;
         private IPluginLogger _logger;
         private AquacomputerStructs.Devices.Octo.Settings? initial_settings = null;
         private AquacomputerStructs.Devices.Octo.Settings? current_settings = null;
@@ -30,7 +30,7 @@ namespace FanControl.AquacomputerDevices.Devices
             if (hidDevice == null)
             {
                 hidDevice = device;
-                hidStream = hidDevice.Open();
+                hidStream = new CachedHidStream(hidDevice.Open());
 
                 Update();
             }

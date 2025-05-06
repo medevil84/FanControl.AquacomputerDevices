@@ -50,6 +50,7 @@
   <ItemGroup>
     <Compile Include="AquacomputerPlugin.cs" />
     <Compile Include="DataStructs\Octo.cs" />
+    <Compile Include="Devices\CachedHidStream.cs" />
     <Compile Include="Devices\DevicesHelpers.cs" />
     <Compile Include="Devices\OctoDevice.cs" />
     <Compile Include="Devices\QuadroDevice.cs" />
