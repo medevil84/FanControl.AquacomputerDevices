@@ -23,12 +23,17 @@ namespace FanControl.AquacomputerDevices.Devices
         private const int G_SPEED = 0x08;
 
         private const byte CTRL_REPORT_ID = 0x03;
-        // liquidctl uses 0x329 as the feature report length argument (includes report id at [0])
         private const int CTRL_REPORT_LENGTH = 0x329;
         private const int CTRL_PUMP = 0x96;
         private const int CTRL_FAN  = 0x41;
-        private const int CTRL_TYPE = 0x00; // 0 = fixed percent
+        private const int CTRL_TYPE = 0x00; // mode: 0 = fixed percent
         private const int CTRL_PCT  = 0x01; // BE16 centi-percent
+
+        // How many bytes of the channel control block we snapshot/restore.
+        // type (1) + percent (2) is enough to leave curve/preset data intact
+        // and switch mode back; we also keep a slightly larger window in case
+        // firmware stores extra flags next to the mode byte.
+        private const int CHANNEL_SNAPSHOT_LEN = 16;
 
         private HidSharp.HidDevice hidDevice = null;
         private CachedHidStream hidStream = null;
@@ -38,11 +43,15 @@ namespace FanControl.AquacomputerDevices.Devices
         private int baseAdj = 0;
         private bool loggedOnce = false;
 
-        // Last successfully applied duties (0-100). null = not under our control.
         private int? appliedPumpDuty = null;
         private int? appliedFanDuty = null;
 
-        // Serialize control writes; avoid overlapping Get/SetFeature from FanControl's 1 Hz updates
+        // Saved before FanControl first takes over each channel
+        private byte[] savedPumpChannel = null;
+        private byte[] savedFanChannel = null;
+        private bool pumpSnapshotTaken = false;
+        private bool fanSnapshotTaken = false;
+
         private readonly object ctrlLock = new object();
         private int writeInProgress = 0;
 
@@ -92,7 +101,6 @@ namespace FanControl.AquacomputerDevices.Devices
                     () => AsTemp(off)));
             }
 
-            // Pair these with the Duty controls
             container.FanSensors.Add(new DeviceBaseSensor<object>(
                 p + ".PumpSpeed", "D5 Next " + index + " Pump Speed",
                 () => AsU16(OFF_PUMP + G_SPEED, 1f)));
@@ -100,45 +108,43 @@ namespace FanControl.AquacomputerDevices.Devices
                 p + ".FanSpeed", "D5 Next " + index + " Fan Speed",
                 () => AsU16(OFF_FAN + G_SPEED, 1f)));
 
-            // Extra metrics (UI still shows "RPM" — FanControl limitation)
-            container.FanSensors.Add(new DeviceBaseSensor<object>(
-                p + ".PumpPower", "D5 Next " + index + " Pump Power W",
-                () => AsU16(OFF_PUMP + G_POWER, 100f)));
-            container.FanSensors.Add(new DeviceBaseSensor<object>(
-                p + ".FanPower", "D5 Next " + index + " Fan Power W",
-                () => AsU16(OFF_FAN + G_POWER, 100f)));
-            container.FanSensors.Add(new DeviceBaseSensor<object>(
-                p + ".PumpVoltage", "D5 Next " + index + " Pump Voltage V",
-                () => AsU16(OFF_PUMP + G_VOLT, 100f)));
-            container.FanSensors.Add(new DeviceBaseSensor<object>(
-                p + ".FanVoltage", "D5 Next " + index + " Fan Voltage V",
-                () => AsU16(OFF_FAN + G_VOLT, 100f)));
-            container.FanSensors.Add(new DeviceBaseSensor<object>(
-                p + ".Rail5V", "D5 Next " + index + " Rail +5V",
-                () => AsU16(OFF_5V, 100f)));
-            container.FanSensors.Add(new DeviceBaseSensor<object>(
-                p + ".Rail12V", "D5 Next " + index + " Rail +12V",
-                () => AsU16(OFF_12V, 100f)));
 
+            // Auto-pair duty controls to their matching D5 Next RPM sensors
+            // (IPluginControlSensor2.PairedFanSensorId) so "Pair speed automatically"
+            // picks pump↔pump and fan↔fan, not motherboard fans.
             container.ControlSensors.Add(new DeviceBaseControlSensor<object>(
                 p + ".PumpDuty", "D5 Next " + index + " Pump Duty",
                 () => appliedPumpDuty, null,
                 v => SetDuty(true, v),
-                () => SetDuty(true, null)));
+                () => SetDuty(true, null),
+                pairedFanSensorId: p + ".PumpSpeed"));
             container.ControlSensors.Add(new DeviceBaseControlSensor<object>(
                 p + ".FanDuty", "D5 Next " + index + " Fan Duty",
                 () => appliedFanDuty, null,
                 v => SetDuty(false, v),
-                () => SetDuty(false, null)));
+                () => SetDuty(false, null),
+                pairedFanSensorId: p + ".FanSpeed"));
         }
 
         public void Unload()
         {
             _logger.Log("D5NextDevice.Unload");
+            // Best-effort restore if we still hold control when FanControl exits
+            try
+            {
+                if (appliedPumpDuty != null) RestoreChannel(true);
+                if (appliedFanDuty != null) RestoreChannel(false);
+            }
+            catch { }
+
             try { if (hidStream != null) hidStream.Close(); } catch { }
             hidStream = null;
             hidDevice = null;
             lastStatus = null;
+            savedPumpChannel = null;
+            savedFanChannel = null;
+            pumpSnapshotTaken = false;
+            fanSnapshotTaken = false;
         }
 
         public void Update()
@@ -227,18 +233,25 @@ namespace FanControl.AquacomputerDevices.Devices
             if (hidDevice == null || hidStream == null)
                 return;
 
-            // Reset path — do not touch hardware (avoid freeze / mode fights)
+            // FanControl released control — restore previous mode/settings
             if (percent == null)
             {
                 if (isPump) appliedPumpDuty = null;
                 else appliedFanDuty = null;
+
+                if (Interlocked.CompareExchange(ref writeInProgress, 1, 0) != 0)
+                    return;
+
+                ThreadPool.QueueUserWorkItem(_ =>
+                {
+                    try { RestoreChannel(isPump); }
+                    finally { Interlocked.Exchange(ref writeInProgress, 0); }
+                });
                 return;
             }
 
             int duty = (int)Math.Round(Math.Max(0f, Math.Min(100f, percent.Value)));
 
-            // FanControl calls Set() every second while a curve is active.
-            // Only write to the device when the value actually changed.
             if (isPump)
             {
                 if (appliedPumpDuty.HasValue && appliedPumpDuty.Value == duty)
@@ -250,22 +263,56 @@ namespace FanControl.AquacomputerDevices.Devices
                     return;
             }
 
-            // Prevent overlapping blocking HID feature ops (this was freezing the UI)
             if (Interlocked.CompareExchange(ref writeInProgress, 1, 0) != 0)
                 return;
 
-            // Fire-and-forget on a background thread so FanControl UI stays responsive
             ThreadPool.QueueUserWorkItem(_ =>
             {
-                try
-                {
-                    WriteDutyBlocking(isPump, duty);
-                }
-                finally
-                {
-                    Interlocked.Exchange(ref writeInProgress, 0);
-                }
+                try { WriteDutyBlocking(isPump, duty); }
+                finally { Interlocked.Exchange(ref writeInProgress, 0); }
             });
+        }
+
+        private byte[] AllocCtrlBuffer()
+        {
+            int len = CTRL_REPORT_LENGTH;
+            try
+            {
+                int maxF = hidDevice.GetMaxFeatureReportLength();
+                if (maxF > 0)
+                    len = maxF;
+            }
+            catch { }
+            if (len < CTRL_REPORT_LENGTH)
+                len = CTRL_REPORT_LENGTH;
+
+            byte[] data = new byte[len];
+            data[0] = CTRL_REPORT_ID;
+            return data;
+        }
+
+        private void SnapshotChannelIfNeeded(bool isPump, byte[] data)
+        {
+            int baseOff = isPump ? CTRL_PUMP : CTRL_FAN;
+            if (baseOff + CHANNEL_SNAPSHOT_LEN > data.Length)
+                return;
+
+            if (isPump && !pumpSnapshotTaken)
+            {
+                savedPumpChannel = new byte[CHANNEL_SNAPSHOT_LEN];
+                Array.Copy(data, baseOff, savedPumpChannel, 0, CHANNEL_SNAPSHOT_LEN);
+                pumpSnapshotTaken = true;
+                _logger.Log("D5NextDevice: saved pump mode=0x" + savedPumpChannel[CTRL_TYPE].ToString("X2")
+                    + " before FanControl takeover");
+            }
+            else if (!isPump && !fanSnapshotTaken)
+            {
+                savedFanChannel = new byte[CHANNEL_SNAPSHOT_LEN];
+                Array.Copy(data, baseOff, savedFanChannel, 0, CHANNEL_SNAPSHOT_LEN);
+                fanSnapshotTaken = true;
+                _logger.Log("D5NextDevice: saved fan mode=0x" + savedFanChannel[CTRL_TYPE].ToString("X2")
+                    + " before FanControl takeover");
+            }
         }
 
         private void WriteDutyBlocking(bool isPump, int dutyPercent)
@@ -277,32 +324,12 @@ namespace FanControl.AquacomputerDevices.Devices
                     int centi = dutyPercent * 100;
                     int baseOff = isPump ? CTRL_PUMP : CTRL_FAN;
 
-                    // Buffer size: report id + body. HidSharp wants report ID in [0].
-                    int len = CTRL_REPORT_LENGTH;
-                    try
-                    {
-                        int maxF = hidDevice.GetMaxFeatureReportLength();
-                        if (maxF > 0)
-                            len = maxF;
-                    }
-                    catch { }
+                    byte[] data = AllocCtrlBuffer();
 
-                    // Ensure at least liquidctl size
-                    if (len < CTRL_REPORT_LENGTH)
-                        len = CTRL_REPORT_LENGTH;
-
-                    byte[] data = new byte[len];
-                    data[0] = CTRL_REPORT_ID;
-
-                    // Read-modify-write so we don't wipe other settings
-                    try
-                    {
-                        hidStream.GetFeature(data);
-                    }
+                    try { hidStream.GetFeature(data); }
                     catch (Exception gex)
                     {
                         _logger.Log("D5NextDevice.GetFeature failed: " + gex.Message);
-                        // Continue with mostly-zero buffer still risks bad config — abort
                         return;
                     }
 
@@ -312,46 +339,15 @@ namespace FanControl.AquacomputerDevices.Devices
                         return;
                     }
 
-                    // Fixed percent mode
-                    data[baseOff + CTRL_TYPE] = 0x00;
-                    // BE16 centi-percent
+                    // Remember original mode/settings the first time we take over
+                    SnapshotChannelIfNeeded(isPump, data);
+
+                    data[baseOff + CTRL_TYPE] = 0x00; // fixed percent
                     data[baseOff + CTRL_PCT]     = (byte)((centi >> 8) & 0xFF);
                     data[baseOff + CTRL_PCT + 1] = (byte)(centi & 0xFF);
 
-                    // CRC-16/USB over [1 .. report_length-3] inclusive (liquidctl)
-                    // report_length here is CTRL_REPORT_LENGTH (0x329) as used by liquidctl
-                    int reportLen = CTRL_REPORT_LENGTH;
-                    if (data.Length < reportLen)
-                        reportLen = data.Length;
-
-                    int crcCount = reportLen - 3; // indices 1 .. reportLen-3
-                    if (crcCount > 0)
-                    {
-                        byte[] body = new byte[crcCount];
-                        Array.Copy(data, 1, body, 0, crcCount);
-                        byte[] crc = new Crc.CrcBase(Crc.CrcParameters.Crc16_USB).ComputeHash(body);
-                        int crcOff = reportLen - 2;
-                        if (crcOff + 1 < data.Length)
-                        {
-                            // LE hash from CrcBase → store as BE on wire (same as Quadro .Reverse())
-                            data[crcOff]     = crc[1];
-                            data[crcOff + 1] = crc[0];
-                        }
-                    }
-
-                    hidStream.SetFeature(data);
-
-                    // Short pause then secondary apply report (official software / kernel)
-                    Thread.Sleep(50);
-                    try
-                    {
-                        byte[] secondary = { 0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x34, 0xC6 };
-                        hidStream.Write(secondary);
-                    }
-                    catch (Exception wex)
-                    {
-                        _logger.Log("D5NextDevice secondary write: " + wex.Message);
-                    }
+                    if (!WriteCtrlReport(data))
+                        return;
 
                     if (isPump) appliedPumpDuty = dutyPercent;
                     else appliedFanDuty = dutyPercent;
@@ -364,6 +360,100 @@ namespace FanControl.AquacomputerDevices.Devices
                     _logger.Log("D5NextDevice.WriteDuty exception: " + ex);
                 }
             }
+        }
+
+        private void RestoreChannel(bool isPump)
+        {
+            lock (ctrlLock)
+            {
+                try
+                {
+                    byte[] saved = isPump ? savedPumpChannel : savedFanChannel;
+                    bool taken = isPump ? pumpSnapshotTaken : fanSnapshotTaken;
+                    if (!taken || saved == null)
+                    {
+                        _logger.Log("D5NextDevice.Restore: no saved " + (isPump ? "pump" : "fan")
+                            + " settings (nothing to restore)");
+                        return;
+                    }
+
+                    int baseOff = isPump ? CTRL_PUMP : CTRL_FAN;
+                    byte[] data = AllocCtrlBuffer();
+
+                    try { hidStream.GetFeature(data); }
+                    catch (Exception gex)
+                    {
+                        _logger.Log("D5NextDevice.Restore GetFeature failed: " + gex.Message);
+                        return;
+                    }
+
+                    if (baseOff + saved.Length > data.Length)
+                    {
+                        _logger.Log("D5NextDevice.Restore: buffer too small");
+                        return;
+                    }
+
+                    Array.Copy(saved, 0, data, baseOff, saved.Length);
+
+                    if (!WriteCtrlReport(data))
+                        return;
+
+                    // Allow a fresh snapshot next time FanControl takes over
+                    if (isPump)
+                    {
+                        pumpSnapshotTaken = false;
+                        savedPumpChannel = null;
+                        appliedPumpDuty = null;
+                    }
+                    else
+                    {
+                        fanSnapshotTaken = false;
+                        savedFanChannel = null;
+                        appliedFanDuty = null;
+                    }
+
+                    _logger.Log("D5NextDevice.Restore " + (isPump ? "pump" : "fan")
+                        + " mode=0x" + saved[CTRL_TYPE].ToString("X2") + " ok");
+                }
+                catch (Exception ex)
+                {
+                    _logger.Log("D5NextDevice.Restore exception: " + ex);
+                }
+            }
+        }
+
+        private bool WriteCtrlReport(byte[] data)
+        {
+            int reportLen = CTRL_REPORT_LENGTH;
+            if (data.Length < reportLen)
+                reportLen = data.Length;
+
+            int crcCount = reportLen - 3;
+            if (crcCount > 0)
+            {
+                byte[] body = new byte[crcCount];
+                Array.Copy(data, 1, body, 0, crcCount);
+                byte[] crc = new Crc.CrcBase(Crc.CrcParameters.Crc16_USB).ComputeHash(body);
+                int crcOff = reportLen - 2;
+                if (crcOff + 1 < data.Length)
+                {
+                    data[crcOff]     = crc[1];
+                    data[crcOff + 1] = crc[0];
+                }
+            }
+
+            hidStream.SetFeature(data);
+            Thread.Sleep(50);
+            try
+            {
+                byte[] secondary = { 0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x34, 0xC6 };
+                hidStream.Write(secondary);
+            }
+            catch (Exception wex)
+            {
+                _logger.Log("D5NextDevice secondary write: " + wex.Message);
+            }
+            return true;
         }
     }
 }
