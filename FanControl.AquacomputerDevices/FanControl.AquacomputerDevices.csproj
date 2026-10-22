@@ -56,6 +56,7 @@
     <Compile Include="Devices\QuadroDevice.cs" />
     <Compile Include="Devices\HighFlowNextDevice.cs" />
     <Compile Include="Devices\FarbwerkDevice.cs" />
+    <Compile Include="Devices\D5NextDevice.cs" />
     <Compile Include="CrcDotNet\CrcBase.cs" />
     <Compile Include="CrcDotNet\CrcConfigurationException.cs" />
     <Compile Include="CrcDotNet\CrcParameters.cs" />
