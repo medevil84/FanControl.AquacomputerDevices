@@ -1,13 +1,15 @@
-
 # FanControl.AquacomputerDevices
-[FanControl](https://github.com/Rem0o/FanControl.Releases) Plugin for the Aquacomputer Devices (HighFlowNext, Quadro and *Highly Experimental* Octo / Farbwerk)
+[FanControl](https://github.com/Rem0o/FanControl.Releases) Plugin for Aquacomputer devices (HighFlowNext, Quadro, D5 Next, and *Highly Experimental* Octo / Farbwerk)
 
 This plugin will interface directly with the usb devices, so *aquasuite is not needed*.
+
 > This code has been tested with firmware version >= 1012 of the **HighFlowNext** device.
 
 > This code has been tested with firmware version == 1032 of the **Quadro** Device.
 
-> This code has been tested with firmware version == 1025 of the **Farbwerk** Device (thanks to [@thomasfifer ](https://github.com/thomasfifer))
+> This code has been tested with firmware version == 1025 of the **Farbwerk** Device (thanks to [@thomasfifer](https://github.com/thomasfifer))
+
+> **D5 Next** support: status sensors (coolant temp, pump/fan RPM, power, voltage) and fixed-percent pump/fan duty control. Protocol offsets match [liquidctl](https://github.com/liquidctl/liquidctl) and the Linux `aquacomputer_d5next` driver. Close AquaSuite while using control from FanControl.
 
 ## USE THIS SOFTWARE AT YOUR OWN RISK!
 The _FanControl.AquacomputerDevices_ main developer is running this software, without any negative side effects. However, it is a **highly experimental software**, and it is based on reverse engineering only.
@@ -37,7 +39,8 @@ _FanControl.AquacomputerDevices_ is open source software. The source code is dis
 ## Acknowledgements
 
  - [FanControl](https://github.com/Rem0o/FanControl.Releases) for providing a great software ( _would be greater if it was open sourced too :P_ )
- - [HidLibrary](https://github.com/mikeobrien/HidLibrary) for providing a clean and easy to use usb hid library.
- - [aquacomputer-quadro-control](https://github.com/leoratte/aquacomputer-quadro-control) was used to understand how to apply settings to the device.
- - [dnSpy](https://github.com/dnSpy/dnSpy) helped a lot during the reverse engineerying
+ - [HidLibrary](https://github.com/mikeobrien/HidLibrary) / [HidSharp](https://www.zer7.com/software/hidsharp) for USB HID access
+ - [aquacomputer-quadro-control](https://github.com/leoratte/aquacomputer-quadro-control) was used to understand how to apply settings to the device
+ - [liquidctl](https://github.com/liquidctl/liquidctl) and [aquacomputer_d5next](https://github.com/aleksamagicka/aquacomputer_d5next-hwmon) for D5 Next HID report offsets and fixed-duty control layout
+ - [dnSpy](https://github.com/dnSpy/dnSpy) helped a lot during the reverse engineering
  - [WireShark](https://www.wireshark.org) for reverse engineering. Without this tool, no "control" part of the quadro would be available.
