@@ -1,38 +1,35 @@
-﻿using FanControl.AquacomputerDevices.Devices;
+using FanControl.AquacomputerDevices.Devices;
+using FanControl.AquacomputerDevices.Logging;
 using FanControl.Plugins;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
-using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace FanControl.AquacomputerDevices
 {
     public class AquacomputerPlugin : IPlugin2
     {
         public string Name => "Aquacomputer Devices";
-        //List<IAquacomputerDevice> devices;
         Dictionary<IAquacomputerDevice, int> devices;
-        
+
         private readonly IPluginLogger _logger;
 
         public AquacomputerPlugin(IPluginLogger logger)
         {
-            _logger = logger;
+            // Silent rate-limit into FanControl service_log (same idea as LianLi v1.1.41+
+            // not dual-writing noise; we only have the host log, so keep it quiet).
+            _logger = new RateLimitedPluginLogger(logger);
         }
 
         public void Close()
         {
-            _logger.Log("AquacomputerPlugin: Closing.");
+            if (devices == null) return;
             devices.Keys.ToList().ForEach(x => x.Unload());
             devices.Clear();
         }
 
         public void Initialize()
         {
-            _logger.Log("AquacomputerPlugin: Initializing.");
             devices = HidSharp.DeviceList.Local.GetHidDevices(0x0C70)
                 .Where(x => AllDevices.GetSupportedProductIds().Contains(x.ProductID))
                 .Select(x => AllDevices.GetDevice(x, _logger))
@@ -46,16 +43,14 @@ namespace FanControl.AquacomputerDevices
 
         public void Load(IPluginSensorsContainer _container)
         {
-            _logger.Log("AquacomputerPlugin: Loading");
+            if (devices == null) return;
             foreach (var item in devices)
-            {
-                _logger.Log("AquacomputerPlugin: Loading device " + item.Key.ToString() + " with index: " + item.Value);
                 item.Key.Load(_container, item.Value);
-            }
         }
 
         public void Update()
         {
+            if (devices == null) return;
             devices.Keys.ToList().ForEach(x => x.Update());
         }
     }

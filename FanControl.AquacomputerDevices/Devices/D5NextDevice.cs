@@ -55,13 +55,18 @@ namespace FanControl.AquacomputerDevices.Devices
         private readonly object ctrlLock = new object();
         private int writeInProgress = 0;
 
+        // When HID stops answering, clear lastStatus so FanControl does not keep
+        // showing the last coolant/RPM (same idea as LianLi bb769a3). Retry open
+        // at most every 30s (LianLi 9259cd3 timing).
+        private DateTime nextReopenUtc = DateTime.MinValue;
+        private const int ReopenIntervalSeconds = 30;
+
         public int GetProductId() => 0xF00E;
         public string GetDevicePath() => hidDevice?.DevicePath;
 
         public IAquacomputerDevice AssignDevice(HidSharp.HidDevice device, IPluginLogger logger)
         {
             _logger = logger;
-            _logger.Log("D5NextDevice.AssignDevice path=" + (device != null ? device.DevicePath : "null"));
             if (hidDevice == null)
             {
                 hidDevice = device;
@@ -82,7 +87,6 @@ namespace FanControl.AquacomputerDevices.Devices
 
         public void Load(IPluginSensorsContainer container, int index = 0)
         {
-            _logger.Log("D5NextDevice.Load index=" + index);
             if (hidDevice == null)
                 return;
 
@@ -109,69 +113,81 @@ namespace FanControl.AquacomputerDevices.Devices
                 () => AsU16(OFF_FAN + G_SPEED, 1f)));
 
 
-            // Auto-pair duty controls to their matching D5 Next RPM sensors
-            // (IPluginControlSensor2.PairedFanSensorId) so "Pair speed automatically"
-            // picks pump↔pump and fan↔fan, not motherboard fans.
-            container.ControlSensors.Add(new DeviceBaseControlSensor<object>(
+            // Auto-pair like lewisgibson/FanControl.LianLi:
+            // PairedFanSensorId MUST be plugin.Name + "/" + fanSensor.Id
+            const string pluginName = "Aquacomputer Devices";
+            string pumpSpeedId = p + ".PumpSpeed";
+            string fanSpeedId = p + ".FanSpeed";
+            string pumpPaired = pluginName + "/" + pumpSpeedId;
+            string fanPaired = pluginName + "/" + fanSpeedId;
+container.ControlSensors.Add(new DeviceBaseControlSensor<object>(
                 p + ".PumpDuty", "D5 Next " + index + " Pump Duty",
                 () => appliedPumpDuty, null,
                 v => SetDuty(true, v),
                 () => SetDuty(true, null),
-                pairedFanSensorId: p + ".PumpSpeed"));
+                pairedFanSensorId: pumpPaired));
             container.ControlSensors.Add(new DeviceBaseControlSensor<object>(
                 p + ".FanDuty", "D5 Next " + index + " Fan Duty",
                 () => appliedFanDuty, null,
                 v => SetDuty(false, v),
                 () => SetDuty(false, null),
-                pairedFanSensorId: p + ".FanSpeed"));
+                pairedFanSensorId: fanPaired));
         }
 
         public void Unload()
         {
-            _logger.Log("D5NextDevice.Unload");
-            // Best-effort restore if we still hold control when FanControl exits
+            // Stop accepting new writes and wait briefly for any in-flight
+            // ThreadPool write/restore so we don't NRE on a closed stream.
+            Interlocked.Exchange(ref writeInProgress, 1);
             try
             {
+                // Best-effort restore while the stream is still open
                 if (appliedPumpDuty != null) RestoreChannel(true);
                 if (appliedFanDuty != null) RestoreChannel(false);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                _logger.Log("D5NextDevice.Unload restore: " + ex.Message);
+            }
 
-            try { if (hidStream != null) hidStream.Close(); } catch { }
-            hidStream = null;
-            hidDevice = null;
-            lastStatus = null;
-            savedPumpChannel = null;
-            savedFanChannel = null;
-            pumpSnapshotTaken = false;
-            fanSnapshotTaken = false;
+            lock (ctrlLock)
+            {
+                try { if (hidStream != null) hidStream.Close(); } catch { }
+                hidStream = null;
+                hidDevice = null;
+                lastStatus = null;
+                savedPumpChannel = null;
+                savedFanChannel = null;
+                pumpSnapshotTaken = false;
+                fanSnapshotTaken = false;
+                appliedPumpDuty = null;
+                appliedFanDuty = null;
+            }
+
+            Interlocked.Exchange(ref writeInProgress, 0);
         }
 
         public void Update()
         {
-            if (hidDevice == null || hidStream == null)
+            if (hidDevice == null)
                 return;
 
             try
             {
-                if (!hidStream.CanRead)
+                if (hidStream == null || !hidStream.CanRead)
                 {
-                    if (!loggedOnce)
-                    {
-                        _logger.Log("D5NextDevice.Update: CanRead=false");
-                        loggedOnce = true;
-                    }
-                    return;
+                    // Device gone / reader thread dead — do not freeze last values.
+                    lastStatus = null;
+                    if (!TryReopenStream())
+                        return;
+                    if (hidStream == null || !hidStream.CanRead)
+                        return;
                 }
 
                 byte[] data = hidStream.Read();
                 if (data == null || data.Length < 20)
                 {
-                    if (!loggedOnce)
-                    {
-                        _logger.Log("D5NextDevice.Update: short buffer len=" + (data == null ? -1 : data.Length));
-                        loggedOnce = true;
-                    }
+                    lastStatus = null;
                     return;
                 }
 
@@ -194,11 +210,45 @@ namespace FanControl.AquacomputerDevices.Devices
             }
             catch (Exception ex)
             {
-                if (!loggedOnce)
-                {
-                    _logger.Log("D5NextDevice.Update exception: " + ex);
-                    loggedOnce = true;
-                }
+                lastStatus = null;
+                if (_logger != null)
+                    _logger.Log("D5NextDevice.Update exception: " + ex.Message);
+                // Allow reopen attempts after the interval.
+                try { hidStream?.Close(); } catch { }
+                hidStream = null;
+            }
+        }
+
+        /// <summary>
+        /// Best-effort reopen of the status stream. Rate-limited to once per
+        /// <see cref="ReopenIntervalSeconds"/> so a missing device does not spam Open().
+        /// </summary>
+        private bool TryReopenStream()
+        {
+            if (hidDevice == null)
+                return false;
+
+            DateTime now = DateTime.UtcNow;
+            if (now < nextReopenUtc)
+                return false;
+            nextReopenUtc = now.AddSeconds(ReopenIntervalSeconds);
+
+            try
+            {
+                try { if (hidStream != null) hidStream.Close(); } catch { }
+                hidStream = null;
+
+                var stream = hidDevice.Open();
+                stream.ReadTimeout = 2000;
+                hidStream = new CachedHidStream(stream);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                hidStream = null;
+                if (_logger != null)
+                    _logger.Log("D5NextDevice.TryReopen failed: " + ex.Message);
+                return false;
             }
         }
 
@@ -236,6 +286,7 @@ namespace FanControl.AquacomputerDevices.Devices
             // FanControl released control — restore previous mode/settings
             if (percent == null)
             {
+                // Clear applied flag first so Unload won't double-restore
                 if (isPump) appliedPumpDuty = null;
                 else appliedFanDuty = null;
 
@@ -245,6 +296,7 @@ namespace FanControl.AquacomputerDevices.Devices
                 ThreadPool.QueueUserWorkItem(_ =>
                 {
                     try { RestoreChannel(isPump); }
+                    catch (Exception ex) { _logger.Log("D5NextDevice.SetDuty restore: " + ex.Message); }
                     finally { Interlocked.Exchange(ref writeInProgress, 0); }
                 });
                 return;
@@ -269,6 +321,7 @@ namespace FanControl.AquacomputerDevices.Devices
             ThreadPool.QueueUserWorkItem(_ =>
             {
                 try { WriteDutyBlocking(isPump, duty); }
+                catch (Exception ex) { _logger.Log("D5NextDevice.SetDuty write: " + ex.Message); }
                 finally { Interlocked.Exchange(ref writeInProgress, 0); }
             });
         }
@@ -302,16 +355,12 @@ namespace FanControl.AquacomputerDevices.Devices
                 savedPumpChannel = new byte[CHANNEL_SNAPSHOT_LEN];
                 Array.Copy(data, baseOff, savedPumpChannel, 0, CHANNEL_SNAPSHOT_LEN);
                 pumpSnapshotTaken = true;
-                _logger.Log("D5NextDevice: saved pump mode=0x" + savedPumpChannel[CTRL_TYPE].ToString("X2")
-                    + " before FanControl takeover");
             }
             else if (!isPump && !fanSnapshotTaken)
             {
                 savedFanChannel = new byte[CHANNEL_SNAPSHOT_LEN];
                 Array.Copy(data, baseOff, savedFanChannel, 0, CHANNEL_SNAPSHOT_LEN);
                 fanSnapshotTaken = true;
-                _logger.Log("D5NextDevice: saved fan mode=0x" + savedFanChannel[CTRL_TYPE].ToString("X2")
-                    + " before FanControl takeover");
             }
         }
 
@@ -321,6 +370,12 @@ namespace FanControl.AquacomputerDevices.Devices
             {
                 try
                 {
+                    if (hidStream == null || hidDevice == null)
+                    {
+                        _logger.Log("D5NextDevice.WriteDuty: stream closed, skip");
+                        return;
+                    }
+
                     int centi = dutyPercent * 100;
                     int baseOff = isPump ? CTRL_PUMP : CTRL_FAN;
 
@@ -352,8 +407,8 @@ namespace FanControl.AquacomputerDevices.Devices
                     if (isPump) appliedPumpDuty = dutyPercent;
                     else appliedFanDuty = dutyPercent;
 
-                    _logger.Log("D5NextDevice.WriteDuty " + (isPump ? "pump" : "fan")
-                        + "=" + dutyPercent + "% centi=" + centi + " ok");
+                    // Successful duty changes are normal operation. Do not log every
+                    // curve adjustment to FanControl's service_log.txt.
                 }
                 catch (Exception ex)
                 {
@@ -368,12 +423,17 @@ namespace FanControl.AquacomputerDevices.Devices
             {
                 try
                 {
+                    // Stream may already be gone (Unload raced with async restore)
+                    if (hidStream == null || hidDevice == null)
+                    {
+                        _logger.Log("D5NextDevice.Restore: stream closed, skip");
+                        return;
+                    }
+
                     byte[] saved = isPump ? savedPumpChannel : savedFanChannel;
                     bool taken = isPump ? pumpSnapshotTaken : fanSnapshotTaken;
                     if (!taken || saved == null)
                     {
-                        _logger.Log("D5NextDevice.Restore: no saved " + (isPump ? "pump" : "fan")
-                            + " settings (nothing to restore)");
                         return;
                     }
 
@@ -412,8 +472,8 @@ namespace FanControl.AquacomputerDevices.Devices
                         appliedFanDuty = null;
                     }
 
-                    _logger.Log("D5NextDevice.Restore " + (isPump ? "pump" : "fan")
-                        + " mode=0x" + saved[CTRL_TYPE].ToString("X2") + " ok");
+                    // Successful restore is normal; rate-limited logger would still
+                    // allow first occurrence — skip routine success entirely.
                 }
                 catch (Exception ex)
                 {
@@ -424,6 +484,13 @@ namespace FanControl.AquacomputerDevices.Devices
 
         private bool WriteCtrlReport(byte[] data)
         {
+            // Must be called under ctrlLock. Guard against Unload racing us.
+            if (hidStream == null)
+            {
+                _logger.Log("D5NextDevice.WriteCtrlReport: stream is null, skip");
+                return false;
+            }
+
             int reportLen = CTRL_REPORT_LENGTH;
             if (data.Length < reportLen)
                 reportLen = data.Length;
@@ -442,7 +509,16 @@ namespace FanControl.AquacomputerDevices.Devices
                 }
             }
 
-            hidStream.SetFeature(data);
+            try
+            {
+                hidStream.SetFeature(data);
+            }
+            catch (Exception ex)
+            {
+                _logger.Log("D5NextDevice.SetFeature failed: " + ex.Message);
+                return false;
+            }
+
             Thread.Sleep(50);
             try
             {

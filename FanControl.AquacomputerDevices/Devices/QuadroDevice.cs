@@ -23,7 +23,6 @@ namespace FanControl.AquacomputerDevices.Devices
         public IAquacomputerDevice AssignDevice(HidSharp.HidDevice device, IPluginLogger logger)
         {
             _logger = logger;
-            _logger.Log($"QuadroDevice.AssignDevice(device: {device}, logger: {logger})");
             if (hidDevice == null)
             {
                 hidDevice = device;
@@ -36,7 +35,6 @@ namespace FanControl.AquacomputerDevices.Devices
 
         public void Load(IPluginSensorsContainer _container, int index = 0)
         {
-            _logger.Log($"QuadroDevice.Load(_container: {_container}, index = {index})");
             if (hidDevice == null)
                 return;
 
@@ -73,7 +71,6 @@ namespace FanControl.AquacomputerDevices.Devices
 
         public void Unload()
         {
-            _logger.Log($"QuadroDevice.Unload()");
             hidStream?.Close();
             hidStream = null;
             hidDevice = null;
