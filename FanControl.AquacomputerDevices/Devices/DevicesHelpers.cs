@@ -1,4 +1,4 @@
-﻿using FanControl.Plugins;
+using FanControl.Plugins;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -53,17 +53,28 @@ namespace FanControl.AquacomputerDevices.Devices
         public void Update() => _lambda_update();
     }
 
-    public class DeviceBaseControlSensor<T> : DeviceBaseSensor<T>, Plugins.IPluginControlSensor
+    public class DeviceBaseControlSensor<T> : DeviceBaseSensor<T>, Plugins.IPluginControlSensor2
     {
         private readonly Action<float?> _lambda_set;
         private readonly Action _lambda_reset;
-        
-        internal DeviceBaseControlSensor(string fieldName, string description, Func<float?> lambda_get, Action lambda_update, Action<float?> lambda_set, Action lambda_reset) : 
+        private readonly string _pairedFanSensorId;
+
+        internal DeviceBaseControlSensor(
+            string fieldName,
+            string description,
+            Func<float?> lambda_get,
+            Action lambda_update,
+            Action<float?> lambda_set,
+            Action lambda_reset,
+            string pairedFanSensorId = null) :
             base(fieldName, description, lambda_get, lambda_update)
         {
             _lambda_set = lambda_set ?? new Action<float?>((x) => { });
             _lambda_reset = lambda_reset ?? new Action(() => { });
+            _pairedFanSensorId = pairedFanSensorId;
         }
+
+        public string PairedFanSensorId => _pairedFanSensorId;
 
         public void Reset() => _lambda_reset();
 
